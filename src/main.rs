@@ -3,16 +3,14 @@ mod cli;
 use std::io::Write;
 use std::{env::current_dir, time::Instant};
 use structopt::StructOpt;
-use sysinfo::{
-    NetworkExt, NetworksExt, ProcessExt, ProcessRefreshKind, RefreshKind, System, SystemExt,
-};
+use sysinfo::{ProcessExt, ProcessRefreshKind, System, SystemExt};
 use tokio::sync::RwLock;
 
 async fn monitor(
     pid: u32,
     sys: &mut System,
     interval: f32,
-    exact: bool,
+    _exact: bool,
     mem_vs_time: &mut RwLock<(Vec<u64>, Vec<u64>)>,
     start: &Instant,
 ) {
@@ -75,6 +73,4 @@ async fn main() -> anyhow::Result<()> {
             _ =monitor(pid, &mut sys, opt.interval, opt.exact,&mut mem_vs_time, &time_start) => {}
         }
     }
-
-    Ok(())
 }
