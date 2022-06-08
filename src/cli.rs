@@ -12,6 +12,9 @@ pub struct CmdParams {
     /// Use exactly interval, if true will ignore time spent during moniting
     #[structopt(short = "e", long)]
     pub exact: bool,
+    /// Monitor mode: gpu, mem
+    #[structopt(short = "m", long)]
+    pub mode: Vec<String>,
     /// Save
     #[structopt(short = "o", long = "output", default_value = "./ben.log", parse(from_os_str))]
     pub output: PathBuf,

@@ -1,5 +1,7 @@
 mod cli;
 
+use nvml_wrapper::enum_wrappers::device::PcieUtilCounter;
+use nvml_wrapper::Nvml;
 use std::io::Write;
 use std::{env::current_dir, time::Instant};
 use structopt::StructOpt;
@@ -33,12 +35,35 @@ async fn monitor(
     tokio::time::sleep(std::time::Duration::from_secs_f32(interval)).await;
 }
 
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref SUPPORT_MODES: Vec<String> = vec!["mem".into(), "gpu".into()];
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let current_dir = current_dir()?;
 
-    let opt = cli::CmdParams::from_args();
+    let mut opt = cli::CmdParams::from_args();
+    if opt.mode.is_empty() {
+        opt.mode = SUPPORT_MODES.to_vec()
+    }
+
     println!("{:#?}", opt);
+
+    // init gpu monitor
+    let nvml = Nvml::init()?;
+    let device = nvml.device_by_index(0)?;
+
+    loop {
+        let process = device.running_compute_processes()?;
+        dbg!(process);
+        tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
+    }
+
+    std::process::abort();
 
     let mut cmd = tokio::process::Command::new("zsh")
         .arg("-c")
@@ -74,3 +99,13 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 }
+
+// let counter_send = PcieUtilCounter::Send;
+// let counter_receive = PcieUtilCounter::Send;
+
+// let pcie = device.pcie_throughput(counter_send);
+// dbg!(pcie);
+
+// let mem_info = device.memory_info()?;
+
+// dbg!(mem_info);
