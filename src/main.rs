@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
     let device = nvml.device_by_index(0)?;
 
     loop {
-        let process = device.running_compute_processes()?;
+        let process = device.accounting_pids()?;
         dbg!(process);
         tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
     }
