@@ -11,10 +11,9 @@ use tokio::sync::RwLock;
 async fn monitor<'a>(
     pid: u32,
     sys: &mut System,
-    interval: f32,
     _exact: bool,
     mem_vs_time: &mut RwLock<(Vec<u64>, Vec<u64>)>,
-    start: &Instant,
+    time_elsapsed: u64,
 ) {
     sys.refresh_processes_specifics(
         ProcessRefreshKind::everything()
@@ -25,11 +24,11 @@ async fn monitor<'a>(
         let mem = process.memory();
 
         let mut mem_vs_time_lock = mem_vs_time.write().await;
-        let t = start.elapsed().as_secs();
-        println!("{pid}: {}  {} KB", t, mem);
+
+        println!("{pid}: {}  {} KB", time_elsapsed, mem);
 
         mem_vs_time_lock.0.push(mem);
-        mem_vs_time_lock.1.push(t);
+        mem_vs_time_lock.1.push(time_elsapsed);
     }
 
     // tokio::time::sleep(std::time::Duration::from_secs_f32(interval)).await;
@@ -57,14 +56,7 @@ async fn main() -> anyhow::Result<()> {
     let nvml = Nvml::init()?;
     let device = nvml.device_by_index(0)?;
 
-    // loop {
-    //     let process = device.running_compute_processes()?;
-    //     dbg!(process);
-    //     tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
-    // }
-
-    // std::process::abort();
-
+    // run command
     let mut cmd = tokio::process::Command::new("zsh")
         .arg("-c")
         .arg(opt.command)
@@ -75,9 +67,11 @@ async fn main() -> anyhow::Result<()> {
     let mut sys = System::new();
     let time_start = std::time::Instant::now();
 
+    // init data buffer
     let mut mem_vs_time = RwLock::new((Vec::<u64>::new(), Vec::<u64>::new()));
-    let mut gpu_vs_time = RwLock::new((Vec::<u64>::new(), Vec::<u64>::new()));
+    let gpu_vs_time = RwLock::new((Vec::<u64>::new(), Vec::<u64>::new()));
 
+    // poll monitoring
     loop {
         tokio::select! {
             _ = cmd.wait() => {
@@ -89,17 +83,48 @@ async fn main() -> anyhow::Result<()> {
                 let mem_list = mem_vs_time.0;
 
                 std::fs::create_dir_all(opt.output.parent().unwrap())?;
-                let mut file = std::fs::File::create(opt.output)?;
-                for (t,m) in time_list.into_iter().zip(mem_list.into_iter()) {
+                let mut file = std::fs::File::create(&(opt.output.display().to_string()+"_mem"))?;
+                for (t,m) in time_list.iter().zip(mem_list.into_iter()) {
                     writeln!(file, "{} {}", t, m)?;
                     println!("{} {}", t, m);
                 }
+
+                let gpu_vs_time = gpu_vs_time.read().await.clone();
+                let gpu_list = gpu_vs_time.0;
+
+                let mut file = std::fs::File::create(&(opt.output.display().to_string()+"_gpu"))?;
+                for (t,m) in time_list.iter().zip(gpu_list.into_iter()) {
+                    writeln!(file, "{} {}", t, m)?;
+                    println!("{} {}", t, m);
+                }
+
                 return Ok(())
             },
-            _ = monitor(pid, &mut sys, opt.interval, opt.exact,&mut mem_vs_time, &time_start) => {
+            _ = tokio::time::sleep(std::time::Duration::from_secs_f32(opt.interval)) => {
+
+                let time_elsapsed = time_start.elapsed().as_secs();
+                monitor(pid, &mut sys,  opt.exact,&mut mem_vs_time, time_elsapsed).await;
+
                 let process = device.running_compute_processes()?;
-                dbg!(process);
-                tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
+
+                let mut used_mem = 0;
+                for p in process {
+                    let gpid = p.pid;
+                    let ggpu = p.used_gpu_memory;
+
+                    if gpid == pid {
+                        match ggpu {
+                            nvml_wrapper::enums::device::UsedGpuMemory::Used(used) => {used_mem = used},
+                            _ => {},
+                        }
+                    }
+                };
+                println!("{pid}: {}  {} KB", time_elsapsed, used_mem);
+
+                let mut gpu_vs_time_lock = gpu_vs_time.write().await;
+                gpu_vs_time_lock.0.push(used_mem);
+                gpu_vs_time_lock.1.push(time_elsapsed);
+                // dbg!(process);
             }
         }
     }

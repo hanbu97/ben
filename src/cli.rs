@@ -16,6 +16,11 @@ pub struct CmdParams {
     #[structopt(short = "m", long)]
     pub mode: Vec<String>,
     /// Save
-    #[structopt(short = "o", long = "output", default_value = "./ben.log", parse(from_os_str))]
+    #[structopt(
+        short = "o",
+        long = "output",
+        default_value = "./ben.log",
+        parse(from_os_str)
+    )]
     pub output: PathBuf,
 }
