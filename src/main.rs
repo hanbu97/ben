@@ -8,7 +8,7 @@ use structopt::StructOpt;
 use sysinfo::{ProcessExt, ProcessRefreshKind, System, SystemExt};
 use tokio::sync::RwLock;
 
-async fn monitor(
+async fn monitor<'a>(
     pid: u32,
     sys: &mut System,
     interval: f32,
@@ -26,13 +26,13 @@ async fn monitor(
 
         let mut mem_vs_time_lock = mem_vs_time.write().await;
         let t = start.elapsed().as_secs();
-        println!("{}  {} KB", t, mem);
+        println!("{pid}: {}  {} KB", t, mem);
 
         mem_vs_time_lock.0.push(mem);
         mem_vs_time_lock.1.push(t);
     }
 
-    tokio::time::sleep(std::time::Duration::from_secs_f32(interval)).await;
+    // tokio::time::sleep(std::time::Duration::from_secs_f32(interval)).await;
 }
 
 #[macro_use]
@@ -57,13 +57,13 @@ async fn main() -> anyhow::Result<()> {
     let nvml = Nvml::init()?;
     let device = nvml.device_by_index(0)?;
 
-    loop {
-        let process = device.running_compute_processes()?;
-        dbg!(process);
-        tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
-    }
+    // loop {
+    //     let process = device.running_compute_processes()?;
+    //     dbg!(process);
+    //     tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
+    // }
 
-    std::process::abort();
+    // std::process::abort();
 
     let mut cmd = tokio::process::Command::new("zsh")
         .arg("-c")
@@ -76,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
     let time_start = std::time::Instant::now();
 
     let mut mem_vs_time = RwLock::new((Vec::<u64>::new(), Vec::<u64>::new()));
+    let mut gpu_vs_time = RwLock::new((Vec::<u64>::new(), Vec::<u64>::new()));
 
     loop {
         tokio::select! {
@@ -95,7 +96,11 @@ async fn main() -> anyhow::Result<()> {
                 }
                 return Ok(())
             },
-            _ =monitor(pid, &mut sys, opt.interval, opt.exact,&mut mem_vs_time, &time_start) => {}
+            _ = monitor(pid, &mut sys, opt.interval, opt.exact,&mut mem_vs_time, &time_start) => {
+                let process = device.running_compute_processes()?;
+                dbg!(process);
+                tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
+            }
         }
     }
 }
