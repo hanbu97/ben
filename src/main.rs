@@ -1,9 +1,8 @@
 mod cli;
 
-use nvml_wrapper::enum_wrappers::device::PcieUtilCounter;
 use nvml_wrapper::NVML as Nvml;
+use std::env::current_dir;
 use std::io::Write;
-use std::{env::current_dir, time::Instant};
 use structopt::StructOpt;
 use sysinfo::{ProcessExt, ProcessRefreshKind, System, SystemExt};
 use tokio::sync::RwLock;
@@ -105,8 +104,8 @@ async fn main() -> anyhow::Result<()> {
                 let time_elsapsed = time_start.elapsed().as_secs();
                 monitor(pid, &mut sys,  opt.exact,&mut mem_vs_time, time_elsapsed).await;
 
+                // gpu process mem usage
                 let process = device.running_compute_processes()?;
-
                 let mut used_mem = 0;
                 for p in process {
                     let gpid = p.pid;
@@ -114,16 +113,20 @@ async fn main() -> anyhow::Result<()> {
 
                     if gpid == pid {
                         match ggpu {
-                            nvml_wrapper::enums::device::UsedGpuMemory::Used(used) => {used_mem = used},
+                            nvml_wrapper::enums::device::UsedGpuMemory::Used(used) => {used_mem = used/1024},
                             _ => {},
                         }
                     }
                 };
                 println!("{pid}: {}  {} KB", time_elsapsed, used_mem);
-
                 let mut gpu_vs_time_lock = gpu_vs_time.write().await;
                 gpu_vs_time_lock.0.push(used_mem);
                 gpu_vs_time_lock.1.push(time_elsapsed);
+
+
+                // gpu  utilization
+                // let util =  device.utilization_rates()?;
+
                 // dbg!(process);
             }
         }
