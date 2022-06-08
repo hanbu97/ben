@@ -1,7 +1,7 @@
 mod cli;
 
 use nvml_wrapper::enum_wrappers::device::PcieUtilCounter;
-use nvml_wrapper::Nvml;
+use nvml_wrapper::NVML as Nvml;
 use std::io::Write;
 use std::{env::current_dir, time::Instant};
 use structopt::StructOpt;
@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
     let device = nvml.device_by_index(0)?;
 
     loop {
-        let process = device.accounting_pids()?;
+        let process = device.running_compute_processes()?;
         dbg!(process);
         tokio::time::sleep(std::time::Duration::from_secs_f32(1.0)).await;
     }
